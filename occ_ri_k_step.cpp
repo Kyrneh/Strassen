@@ -7,9 +7,9 @@
 #include <cstdio>
 //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
 template<typename T>
-void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys);
+void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys, const size_t N_bf);
 
-
+size_t total_flops;
 #if 1
 int main(int argc, char** argv){
   if(argc < 10){
@@ -52,7 +52,7 @@ int main(int argc, char** argv){
       #pragma omp for schedule(static)
       for(size_t P=0; P<N_aux;++P){
         //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
-        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys);
+        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys,N_bf);
 
         //(mu i|P) = \sum_nu (mu nu|P) C_{nu i}
         matmult(mui_P,ints_3c_decompressed,false,occ_MOs,false,1.0,0.0);
@@ -72,8 +72,8 @@ int main(int argc, char** argv){
     }
     const auto end=std::chrono::steady_clock::now();
     double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    const size_t total_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
-    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(total_flops)/us);
+    const size_t theoretical_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
+    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(theoretical_flops)/us);
   }
 
   const double L2_norm_of_output = K_mu_i.calc_frobenius_norm();
@@ -86,6 +86,7 @@ int main(int argc, char** argv){
   for(int i=0;i<3;++i)
   {
     K_mu_i_bsm.fill_with_values(0.e0);
+    total_flops = 0lu;
     const auto start=std::chrono::steady_clock::now();
     #pragma omp parallel
     {
@@ -99,7 +100,7 @@ int main(int argc, char** argv){
       #pragma omp for schedule(static)
       for(size_t P=0; P<N_aux;++P){
         //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
-        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys);
+        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys,N_bf);
         //transform into bs format
         ints_3c_decompressed_bsm.copy_from_input_matrix(ints_3c_decompressed);
 
@@ -124,24 +125,28 @@ int main(int argc, char** argv){
     }
     const auto end=std::chrono::steady_clock::now();
     double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    const size_t total_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
-    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(total_flops)/us);
+    const size_t theoretical_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
+    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(theoretical_flops)/us);
+    printf("Realized sparsity: = %3.2f%%\n",1e2*(double)total_flops/((double)theoretical_flops));
     printf("relative RMSD = %e\n",(K_mu_i_bsm.to_matrix()-K_mu_i).calc_frobenius_norm()/L2_norm_of_output);
   }
 }
 
 //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
 template<typename T>
-void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys)
+void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys, const size_t N_bf)
 {
   //make sure we have the right number of keys
   assert(ints_3c_compressed.nrow() == v2m_keys.size());
   //make sure no key is too big
   assert(*std::max_element(v2m_keys.data().cbegin(),v2m_keys.data().cend()) <= ints_3c_decompressed.size());
-  T* __restrict__ decompressed_ptr = ints_3c_decompressed.data_ptr();
-  const T* __restrict__ compressed_ptr = &ints_3c_compressed.elem(0,P);
   for (size_t id_compressed=0;id_compressed < v2m_keys.size();++id_compressed){
-    decompressed_ptr[v2m_keys.elem(id_compressed,0)] = compressed_ptr[id_compressed];
+    const size_t key = v2m_keys.elem(id_compressed,0);
+    size_t row = key%N_bf;
+    size_t col = key/N_bf;
+    //make sure to only fill lower triangle
+    if(col > row) std::swap(row,col);
+    ints_3c_decompressed.elem(row,col) = ints_3c_compressed.elem(id_compressed,P);
   }
 }
 #endif
