@@ -228,7 +228,7 @@ void BlockSparseMatrix<Num>::add_transpose(const BlockSparseMatrix<Num>& rhs){
   assert(this->ncolblocks() == rhs.nrowblocks());
   assert(this->nrow() == rhs.ncol());
   assert(this->ncol() == rhs.nrow());
-  const size_t nijb = this->nblocks();
+  //const size_t nijb = this->nblocks();
   const size_t nib = this->nrowblocks();
   const size_t njb = this->ncolblocks();
   //parallel loop over blocks
@@ -288,7 +288,7 @@ Num dot(const BlockSparseMatrix<Num>& lhs, const BlockSparseMatrix<Num>& rhs, Nu
   }
   return retval;
 }
-
+extern size_t total_flops;
 template<typename Num>
 void matmult(BlockSparseMatrix<Num>& C, 
              const BlockSparseMatrix<Num>& A, const bool transA,
@@ -350,8 +350,8 @@ void matmult(BlockSparseMatrix<Num>& C,
   const Num thresh_per_block = thresh*static_cast<Num>(i_block_size*j_block_size*k_block_size);
 
   //parallel loop over ij super blocks combinations
-  size_t nsig = 0;
-  #pragma omp parallel for schedule(runtime) reduction(+: nsig)
+  size_t nflops = 0;
+  #pragma omp parallel for schedule(guided) reduction(+: nflops)
   for(size_t ijbs=0;ijbs<nibs*njbs;++ijbs){
     const size_t jbs = ijbs/nibs;
     const size_t jb_start = jbs*njb_per_super_block;
@@ -391,6 +391,7 @@ void matmult(BlockSparseMatrix<Num>& C,
             if (a_block.size() != 0 && b_block.size() != 0) {//only for existing block combi
               const auto ni_act = transA? a_block.ncol() : a_block.nrow();
               const auto nj_act = transB? b_block.nrow() : b_block.ncol();
+              const auto nk_act = transA? a_block.nrow() : a_block.ncol();
               const Num norm_a = a_block.frobenius_norm();
               const Num norm_b = b_block.frobenius_norm();
               const Num est = norm_a*norm_b;
@@ -399,7 +400,7 @@ void matmult(BlockSparseMatrix<Num>& C,
                 if(!does_block_exist){// if not yet existing - > create
                   c_block = Mat(ni_act,nj_act,C.allocator());//allocate C block
                 }
-                nsig++;
+                nflops += 2lu*ni_act*nj_act*nk_act;
                 const Num new_beta = does_block_exist? Num(1) : Num(0);//if we created a fresh block, we want to override instead of add
                 matmult(c_block,a_block,transA,b_block,transB,alpha,new_beta);
               }
@@ -410,6 +411,8 @@ void matmult(BlockSparseMatrix<Num>& C,
       }
     }
   }
+  #pragma omp atomic
+    total_flops += nflops;
   //printf("  %lu/%lu (%2.2f %%)\n",nsig,nib*njb*nkb,1.e2*(double)nsig/((double)(nib*njb*nkb)));
 }
 
