@@ -226,6 +226,49 @@ void Matrix<T,Allocator>::write_to_file(const char* filename, const size_t start
   fclose(file_handle);
 }
 
+/*
+ * computes C = A*B (if swap_sides == false) or C = B*A (if swap_sides == true)
+ * A needs to be a symmetric matrix
+ * upper_triangle == false -> lower triangle of A is referenced
+ * upper_triangle == true - > upper triangle of A is referenced
+*/
+template<typename Num,typename Allocator1,typename Allocator2,typename Allocator3>
+void matmult_symm(Matrix<Num,Allocator1>& C, const Matrix<Num,Allocator2>& A, 
+    const Matrix<Num,Allocator3>& B, const bool swap_sides, const bool upper_triangle, const Num& alpha, const Num& beta){
+
+  const char cside = swap_sides? 'r' : 'l';
+  const char cuplo = upper_triangle? 'u' : 'l';
+
+  const size_t m1 = C.nrow();
+#ifndef NDEBUG
+  const size_t m2 = swap_sides ? B.nrow() : A.nrow();
+  if(m1 != m2){
+    puts("m1 != m2 in matmult()");
+    print_stack_trace();
+    exit(1);
+  }
+#endif
+  const int m = (int)m1;
+
+  const size_t n1 = C.ncol();
+#ifndef NDEBUG
+  const size_t n2 = swap_sides ? A.ncol() : B.ncol();
+  if(n1 != n2){
+    puts("n1 != n2 in matmult()");
+    print_stack_trace();
+    exit(1);
+  }
+#endif
+  const int n = (int)n1;
+
+  const int lda = (int)A.nrow();
+  const int ldb = (int)B.nrow();
+  const int ldc = (int)C.nrow();
+
+  any_symm(&cside,&cuplo,&m,&n,&alpha,A.data_ptr(),&lda,B.data_ptr(),&ldb,&beta,C.data_ptr(),&ldc);
+}
+
+
 template<typename Num,typename Allocator1,typename Allocator2,typename Allocator3>
 void matmult(Matrix<Num,Allocator1>& C, const Matrix<Num,Allocator2>& A, const bool transA, 
     const Matrix<Num,Allocator3>& B, const bool transB, const Num& alpha, const Num& beta){
@@ -259,7 +302,6 @@ void matmult(Matrix<Num,Allocator1>& C, const Matrix<Num,Allocator2>& A, const b
 
   const size_t k1 = transA ? A.nrow() : A.ncol();
   const size_t k2 = transB ? B.ncol() : B.nrow();
-  assert(k1 == k2);
 #ifndef NDEBUG
   if(k1 != k2){
     printf("(%lu x %lu) = (%lu x %lu)%s (%lu x %lu)%s does not work out!\n",C.nrow(),C.ncol(),A.nrow(),A.ncol(),(transA? "^T" : ""),B.nrow(),B.ncol(),(transB? "^T" : ""));
