@@ -116,7 +116,7 @@ int main(int argc, char** argv){
     }
     const auto end=std::chrono::steady_clock::now();
     double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    const size_t theoretical_flops = 2*(N_bf*N_bf*N_occ*N_aux + 4*N_bf*N_occ*N_occ*N_aux);
+    const size_t theoretical_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
     printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(theoretical_flops)/us);
     printf("Realized sparsity: = %3.2f%%\n",1e2*(1.e0-(double)total_flops/((double)theoretical_flops)));
     printf("relative RMSD = %e\n",(K_mu_i_bsm.to_matrix()-K_mu_i).calc_frobenius_norm()/L2_norm_of_output);
