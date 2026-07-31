@@ -92,7 +92,7 @@ int main(int argc, char** argv){
       BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,0.0);
       BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,0.0);
       K_mu_i_sub_bsm.fill_with_values(0.e0);
-      #pragma omp for schedule(static)
+      #pragma omp for schedule(guided)
       for(size_t P=0; P<N_aux;++P){
         //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
         decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys,N_bf);
