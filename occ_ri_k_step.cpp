@@ -47,7 +47,6 @@ int main(int argc, char** argv){
       Matrix<double> ints_3c_decompressed(0.e0,N_bf,N_bf);
       Matrix<double> mui_P(N_bf,N_occ);
       Matrix<double> ij_P(N_occ,N_occ);
-      Matrix<double> ij_P_sym(N_occ,N_occ);
       Matrix<double> K_mu_i_sub(0.e0,N_bf,N_occ);
       #pragma omp for schedule(static)
       for(size_t P=0; P<N_aux;++P){
@@ -58,11 +57,8 @@ int main(int argc, char** argv){
         matmult(mui_P,ints_3c_decompressed,false,occ_MOs,false,1.0,0.0);
         //(ij|P) = \sum_mu  C_{mu i} (mu j|P)
         matmult(ij_P,occ_MOs,true,mui_P,false,1.0,0.0);
-        //symmetrize (ij|P) + (ji|P) to account for missing upper triangle of (mn|P)
-        ij_P_sym = ij_P;
-        ij_P_sym.add_transpose(ij_P);
         //K_{mu j} = \sum_{iP} (mu i|P) (ij|P)
-        matmult(K_mu_i_sub,mui_P,false,ij_P_sym,false,1.0,1.0);
+        matmult(K_mu_i_sub,mui_P,false,ij_P,false,1.0,1.0);
       }
       //collect output of all threads
       #pragma omp critical
@@ -94,7 +90,6 @@ int main(int argc, char** argv){
       BlockSparseMatrix<double> ints_3c_decompressed_bsm(N_bf,N_bf,bs,bs,1e-20);
       BlockSparseMatrix<double> mui_P_bsm(N_bf,N_occ,bs,bs,0.0);
       BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,0.0);
-      BlockSparseMatrix<double> ij_P_bsm_sym(ij_P_bsm);
       BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,0.0);
       K_mu_i_sub_bsm.fill_with_values(0.e0);
       #pragma omp for schedule(static)
@@ -109,12 +104,8 @@ int main(int argc, char** argv){
         mui_P_bsm.calc_frobenius_norms();
         //(ij|P) = \sum_mu  C_{mu i} (mu j|P)
         matmult(ij_P_bsm,occ_MOs_bsm,true,mui_P_bsm,false,thresh_mult,1.0,0.0);
-        //symmetrize (ij|P) + (ji|P) to account for missing upper triangle of (mn|P)
-        ij_P_bsm_sym=ij_P_bsm;
-        ij_P_bsm_sym.add_transpose(ij_P_bsm);
-        //K_{mu j} = \sum_{iP} (mu i|P) (ij|P)
-        //ij_P_bsm.calc_frobenius_norms();
-        matmult(K_mu_i_sub_bsm,mui_P_bsm,false,ij_P_bsm_sym,false,thresh_mult,1.0,1.0);
+        ij_P_bsm.calc_frobenius_norms();
+        matmult(K_mu_i_sub_bsm,mui_P_bsm,false,ij_P_bsm,false,thresh_mult,1.0,1.0);
       }
       //collect output of all threads
       #pragma omp critical
@@ -127,7 +118,7 @@ int main(int argc, char** argv){
     double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
     const size_t theoretical_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
     printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(theoretical_flops)/us);
-    printf("Realized sparsity: = %3.2f%%\n",1e2*(double)total_flops/((double)theoretical_flops));
+    printf("Realized sparsity: = %3.2f%%\n",1e2*(1.e0-(double)total_flops/((double)theoretical_flops)));
     printf("relative RMSD = %e\n",(K_mu_i_bsm.to_matrix()-K_mu_i).calc_frobenius_norm()/L2_norm_of_output);
   }
 }
@@ -144,9 +135,15 @@ void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const
     const size_t key = v2m_keys.elem(id_compressed,0);
     size_t row = key%N_bf;
     size_t col = key/N_bf;
+#if 0
     //make sure to only fill lower triangle
     if(col > row) std::swap(row,col);
     ints_3c_decompressed.elem(row,col) = ints_3c_compressed.elem(id_compressed,P);
+#else
+    //fill upper and lower triangle
+    ints_3c_decompressed.elem(row,col) = ints_3c_compressed.elem(id_compressed,P);
+    ints_3c_decompressed.elem(col,row) = ints_3c_compressed.elem(id_compressed,P);
+#endif
   }
 }
 #endif
