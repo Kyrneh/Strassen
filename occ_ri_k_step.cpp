@@ -77,8 +77,9 @@ int main(int argc, char** argv){
 
 
   printf("--- sparse occ-RIK  ---\n");
-  BlockSparseMatrix<double> K_mu_i_bsm(N_bf,N_occ,bs,bs,0.0);
-  BlockSparseMatrix<double> occ_MOs_bsm(occ_MOs,bs,bs,0.0);
+  const double alloc_thresh = 1e-14;
+  BlockSparseMatrix<double> K_mu_i_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
+  BlockSparseMatrix<double> occ_MOs_bsm(occ_MOs,bs,bs,alloc_thresh);
   for(int i=0;i<3;++i)
   {
     K_mu_i_bsm.fill_with_values(0.e0);
@@ -87,10 +88,10 @@ int main(int argc, char** argv){
     #pragma omp parallel
     {
       Matrix<double> ints_3c_decompressed(0.e0,N_bf,N_bf);
-      BlockSparseMatrix<double> ints_3c_decompressed_bsm(N_bf,N_bf,bs,bs,1e-20);
-      BlockSparseMatrix<double> mui_P_bsm(N_bf,N_occ,bs,bs,0.0);
-      BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,0.0);
-      BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,0.0);
+      BlockSparseMatrix<double> ints_3c_decompressed_bsm(N_bf,N_bf,bs,bs,alloc_thresh);
+      BlockSparseMatrix<double> mui_P_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
+      BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,alloc_thresh);
+      BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
       K_mu_i_sub_bsm.fill_with_values(0.e0);
       #pragma omp for schedule(guided)
       for(size_t P=0; P<N_aux;++P){
