@@ -21,11 +21,11 @@ int main(int argc, char** argv){
   const size_t chunk_size = std::stol(argv[7]);
   if(chunk_size > N_aux){ 
     puts("chunk_size needs to be <= N_aux!");
-    exit(1);
+    return(1);
   }
   if(chunk_size > N_vec2){ 
     puts("chunk_size needs to be <= N_vec2!");
-    exit(1);
+    return(1);
   }
 
   Matrix<double> ints_3c(N_vec2, N_aux);
@@ -45,10 +45,11 @@ int main(int argc, char** argv){
     const double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
     printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(N_vec2*N_aux*N_aux)/us);
   }
-  const double L2_norm_of_output = ints_3c_transformed.calc_frobenius_norm();
-  printf("L2 norm of output = %e\n",L2_norm_of_output);
+  //const double L2_norm_of_output = ints_3c_transformed.calc_frobenius_norm();
+  //printf("L2 norm of output = %e\n",L2_norm_of_output);
 
 
+#if 0
   {
     BlockSparseMatrix<double> ints_3c_bs(ints_3c,bs,bs,0.0);
     //ints_3c = Matrix<double>();
@@ -69,6 +70,7 @@ int main(int argc, char** argv){
       printf(" relative RMSD = %e\n",(ints_3c_transformed_bs.to_matrix()-ints_3c_transformed).calc_frobenius_norm()/L2_norm_of_output);
     }
   }
+#endif
 
 #if 1
   {
@@ -76,9 +78,10 @@ int main(int argc, char** argv){
     //cut the molecule into perfectly sized chunks and then perform Strassen mults on those chunks in parallel
     //const size_t chunk_size = bs*(size_t)(std::exp2(std::floor(std::log2((double)(N_aux/bs)+0.5)))+0.5);
     printf("chunk_size = %lu\n",chunk_size);
-    Matrix<double> ints_3c_transformed_strassen = ints_3c_transformed;
+    Matrix<double>& ints_3c_transformed_strassen = ints_3c_transformed;
 
     Matrix<double> ints_2c_chopped(chunk_size,chunk_size);
+    #pragma parallel omp for schedule(static) collapse(2)
     for (size_t col=0;col<chunk_size;++col){
       for (size_t row=0;row<chunk_size;++row){
         assert(row < ints_2c.nrow());
@@ -86,7 +89,6 @@ int main(int argc, char** argv){
         ints_2c_chopped.elem(row,col) = ints_2c.elem(row,col);
       }
     }
-    BlockSparseMatrix<double> ints_2c_bs(ints_2c_chopped,bs,bs,0.0);
     const size_t n_chunks = N_vec2/chunk_size;
 
     for(int i=0;i<1;++i)
@@ -94,7 +96,9 @@ int main(int argc, char** argv){
       const auto start=std::chrono::steady_clock::now();
       #pragma omp parallel
       {
+        BlockSparseMatrix<double> ints_2c_bs(ints_2c_chopped,bs,bs,0.0);
         Matrix<double> ints_3c_chopped(0.e0,chunk_size,chunk_size);
+        //Matrix<double> ints_3c_transformed_chopped(0.e0,chunk_size,chunk_size);
         BlockSparseMatrix<double> ints_3c_bs(ints_3c_chopped,bs,bs,0.0);
 
         BlockSparseMatrix<double> ints_3c_transformed_bs(ints_3c_chopped,bs,bs,0.0);
@@ -110,10 +114,11 @@ int main(int argc, char** argv){
             }
           }
           ints_3c_bs.copy_from_input_matrix(ints_3c_chopped);
-          ints_3c_transformed_bs.fill_with_values(0.e0);
+          //ints_3c_transformed_bs.fill_with_values(0.e0);
           //do the the transformation (matmult)
-          matmult_strassen_sparse(ints_3c_transformed_bs,ints_3c_bs,false,ints_2c_bs,false,thresh_mult,1.0,0.0);
-          //matmult                (ints_3c_transformed_bs,ints_3c_bs,false,ints_2c_bs,false,thresh_mult,1.0,0.0);
+          //matmult(ints_3c_transformed_chopped,ints_3c_chopped,false,ints_2c_chopped,false,1.0,0.0);
+          matmult_strassen_sparse(ints_3c_transformed_bs,ints_3c_bs,false,ints_2c_bs,false,thresh_mult,1.0,1.0);
+          //matmult                (ints_3c_transformed_bs,ints_3c_bs,false,ints_2c_bs,false,thresh_mult,1.0,1.0);
           //transform back to dense matrix (reuse ints_3c_chopped buffer)
           ints_3c_transformed_bs.to_pointer(ints_3c_chopped.data_ptr());
           //write back to output array
@@ -123,14 +128,15 @@ int main(int argc, char** argv){
               assert(chunk*chunk_size+row < ints_3c_transformed.nrow());
               assert(col < ints_3c_transformed.ncol());
               ints_3c_transformed_strassen.elem(chunk*chunk_size+row,col) = ints_3c_chopped.elem(row,col);
+              //ints_3c_transformed_strassen.elem(chunk*chunk_size+row,col) = ints_3c_transformed_chopped.elem(row,col);
             }
           }
         }//end omp for
       }//end omp parallel
       const auto end=std::chrono::steady_clock::now();
       const double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-      printf("  [%d] %.4f s  (%.4f GFLOPs)",i+1,1e-6*us,2e-3*(double)(n_chunks*chunk_size*chunk_size*chunk_size)/us);
-      printf(" relative RMSD = %e\n",(ints_3c_transformed_strassen-ints_3c_transformed).calc_frobenius_norm()/L2_norm_of_output);
+      printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(n_chunks*chunk_size*chunk_size*chunk_size)/us);
+      //printf(" relative RMSD = %e\n",(ints_3c_transformed_strassen-ints_3c_transformed).calc_frobenius_norm()/L2_norm_of_output);
     }//end timing loop
   }//end Strassen block
 #endif
