@@ -7,6 +7,7 @@
 #include <cstdio>
 
 size_t min_size_for_strassen;
+size_t total_flops;
 int main(int argc, char** argv){
   if(argc < 5){
     puts("Usage: <program> <blocksize> <strassen_min> <thresh> <n_runs>");

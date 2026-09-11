@@ -27,6 +27,19 @@ void any_gemm<double>(const char* transa,const char* transb ,const int* m,const 
 }
 
 template<>
+void any_symm(const char* side,const char* uplo ,const int* m,const int* n,
+    const double* alpha,const double* A,const int* lda,const double* B,const int* ldb,const double* beta ,double* C,const int* ldc){
+  dsymm_(side,uplo,m,n,alpha,A,lda,B,ldb,beta,C,ldc);
+}
+
+template<>
+void any_symm(const char* side,const char* uplo ,const int* m,const int* n,
+    const float* alpha,const float* A,const int* lda,const float* B,const int* ldb,const float* beta ,float* C,const int* ldc){
+  ssymm_(side,uplo,m,n,alpha,A,lda,B,ldb,beta,C,ldc);
+}
+
+
+template<>
 double any_dot<double>(const int* size,const double* A,const int* inca,const double* B,const int* incb){
   return ddot_(size,A,inca,B,incb);
 }

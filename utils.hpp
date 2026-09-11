@@ -34,7 +34,7 @@ constexpr size_t ij(size_t i, size_t j, size_t dimi) {
 static inline void print_stack_trace(){
   char cdebug[1000];
   sprintf(cdebug, "gdb -batch -ex 'bt' -p %d", (int) getpid());
-  (void)system(cdebug);
+  __attribute__((unused)) const int error_code = system(cdebug);
 }
 #endif
 

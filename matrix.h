@@ -93,6 +93,10 @@ template<typename Num,typename Allocator1,typename Allocator2,typename Allocator
 void matmult(Matrix<Num,Allocator1>& C, const Matrix<Num,Allocator2>& A, const bool transA, 
     const Matrix<Num,Allocator3>& B, const bool transB, const Num& alpha = Num(1), const Num& beta = Num(0));
 
+template<typename Num,typename Allocator1,typename Allocator2,typename Allocator3>
+void matmult_symm(Matrix<Num,Allocator1>& C, const Matrix<Num,Allocator2>& A, 
+    const Matrix<Num,Allocator3>& B, const bool swap_sides, const bool upper_triangle, const Num& alpha = Num(1), const Num& beta = Num(0));
+
 template<typename Num1, typename Num2, typename Allocator1, typename Allocator2>
 void assert_sizes(const Matrix<Num1,Allocator1>& lhs,const Matrix<Num2,Allocator2>& rhs);
 

@@ -7,9 +7,9 @@
 #include <cstdio>
 //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
 template<typename T>
-void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys);
+void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys, const size_t N_bf);
 
-
+size_t total_flops;
 int main(int argc, char** argv){
   if(argc < 10){
     puts("Usage: <program> <N_bf> <N_aux> <N_occ> <N_vec2> <3c filename> <MO filename> <v2m_key_filename> <blocksize> <threshold>");
@@ -46,22 +46,18 @@ int main(int argc, char** argv){
       Matrix<double> ints_3c_decompressed(0.e0,N_bf,N_bf);
       Matrix<double> mui_P(N_bf,N_occ);
       Matrix<double> ij_P(N_occ,N_occ);
-      Matrix<double> ij_P_sym(N_occ,N_occ);
       Matrix<double> K_mu_i_sub(0.e0,N_bf,N_occ);
       #pragma omp for schedule(static)
       for(size_t P=0; P<N_aux;++P){
         //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
-        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys);
+        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys,N_bf);
 
         //(mu i|P) = \sum_nu (mu nu|P) C_{nu i}
         matmult(mui_P,ints_3c_decompressed,false,occ_MOs,false,1.0,0.0);
         //(ij|P) = \sum_mu  C_{mu i} (mu j|P)
         matmult(ij_P,occ_MOs,true,mui_P,false,1.0,0.0);
-        //symmetrize (ij|P) + (ji|P) to account for missing upper triangle of (mn|P)
-        ij_P_sym = ij_P;
-        ij_P_sym.add_transpose(ij_P);
         //K_{mu j} = \sum_{iP} (mu i|P) (ij|P)
-        matmult(K_mu_i_sub,mui_P,false,ij_P_sym,false,1.0,1.0);
+        matmult(K_mu_i_sub,mui_P,false,ij_P,false,1.0,1.0);
       }
       //collect output of all threads
       #pragma omp critical
@@ -71,8 +67,8 @@ int main(int argc, char** argv){
     }
     const auto end=std::chrono::steady_clock::now();
     double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    const size_t total_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
-    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(total_flops)/us);
+    const size_t theoretical_flops = 2lu*(N_bf*N_bf*N_occ*N_aux + 2lu*N_bf*N_occ*N_occ*N_aux);
+    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,1e-3*(double)(theoretical_flops)/us);
   }
 
   const double L2_norm_of_output = K_mu_i.calc_frobenius_norm();
@@ -80,25 +76,26 @@ int main(int argc, char** argv){
 
 
   printf("--- sparse occ-RIK  ---\n");
-  BlockSparseMatrix<double> K_mu_i_bsm(N_bf,N_occ,bs,bs,0.0);
-  BlockSparseMatrix<double> occ_MOs_bsm(occ_MOs,bs,bs,0.0);
+  const double alloc_thresh = 1e-14;
+  BlockSparseMatrix<double> K_mu_i_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
+  BlockSparseMatrix<double> occ_MOs_bsm(occ_MOs,bs,bs,alloc_thresh);
   for(int i=0;i<3;++i)
   {
     K_mu_i_bsm.fill_with_values(0.e0);
+    total_flops = 0lu;
     const auto start=std::chrono::steady_clock::now();
     #pragma omp parallel
     {
       Matrix<double> ints_3c_decompressed(0.e0,N_bf,N_bf);
-      BlockSparseMatrix<double> ints_3c_decompressed_bsm(N_bf,N_bf,bs,bs,1e-20);
-      BlockSparseMatrix<double> mui_P_bsm(N_bf,N_occ,bs,bs,0.0);
-      BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,0.0);
-      BlockSparseMatrix<double> ij_P_bsm_sym(ij_P_bsm);
-      BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,0.0);
+      BlockSparseMatrix<double> ints_3c_decompressed_bsm(N_bf,N_bf,bs,bs,alloc_thresh);
+      BlockSparseMatrix<double> mui_P_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
+      BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,alloc_thresh);
+      BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
       K_mu_i_sub_bsm.fill_with_values(0.e0);
-      #pragma omp for schedule(static)
+      #pragma omp for schedule(guided)
       for(size_t P=0; P<N_aux;++P){
         //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
-        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys);
+        decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys,N_bf);
         //transform into bs format
         ints_3c_decompressed_bsm.copy_from_input_matrix(ints_3c_decompressed);
 
@@ -107,12 +104,8 @@ int main(int argc, char** argv){
         mui_P_bsm.calc_frobenius_norms();
         //(ij|P) = \sum_mu  C_{mu i} (mu j|P)
         matmult(ij_P_bsm,occ_MOs_bsm,true,mui_P_bsm,false,thresh_mult,1.0,0.0);
-        //symmetrize (ij|P) + (ji|P) to account for missing upper triangle of (mn|P)
-        ij_P_bsm_sym=ij_P_bsm;
-        ij_P_bsm_sym.add_transpose(ij_P_bsm);
-        //K_{mu j} = \sum_{iP} (mu i|P) (ij|P)
-        //ij_P_bsm.calc_frobenius_norms();
-        matmult(K_mu_i_sub_bsm,mui_P_bsm,false,ij_P_bsm_sym,false,thresh_mult,1.0,1.0);
+        ij_P_bsm.calc_frobenius_norms();
+        matmult(K_mu_i_sub_bsm,mui_P_bsm,false,ij_P_bsm,false,thresh_mult,1.0,1.0);
       }
       //collect output of all threads
       #pragma omp critical
@@ -123,24 +116,34 @@ int main(int argc, char** argv){
     }
     const auto end=std::chrono::steady_clock::now();
     double us=(double)std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    const size_t total_flops = 2*(N_bf*N_bf*N_occ*N_aux + 2*N_bf*N_occ*N_occ*N_aux);
-    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,2e-3*(double)(total_flops)/us);
+    const size_t theoretical_flops = 2lu*(N_bf*N_bf*N_occ*N_aux + 2lu*N_bf*N_occ*N_occ*N_aux);
+    printf("  [%d] %.4f s  (%.4f GFLOPs)\n",i+1,1e-6*us,1e-3*(double)(theoretical_flops)/us);
+    printf("Realized sparsity: = %3.2f%%\n",1e2*(1.e0-(double)total_flops/((double)theoretical_flops)));
     printf("relative RMSD = %e\n",(K_mu_i_bsm.to_matrix()-K_mu_i).calc_frobenius_norm()/L2_norm_of_output);
   }
 }
 
 //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
 template<typename T>
-void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys)
+void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys, const size_t N_bf)
 {
   //make sure we have the right number of keys
   assert(ints_3c_compressed.nrow() == v2m_keys.size());
   //make sure no key is too big
   assert(*std::max_element(v2m_keys.data().cbegin(),v2m_keys.data().cend()) <= ints_3c_decompressed.size());
-  T* __restrict__ decompressed_ptr = ints_3c_decompressed.data_ptr();
-  const T* __restrict__ compressed_ptr = &ints_3c_compressed.elem(0,P);
   for (size_t id_compressed=0;id_compressed < v2m_keys.size();++id_compressed){
-    decompressed_ptr[v2m_keys.elem(id_compressed,0)] = compressed_ptr[id_compressed];
+    const size_t key = v2m_keys.elem(id_compressed,0);
+    size_t row = key%N_bf;
+    size_t col = key/N_bf;
+#if 0
+    //make sure to only fill lower triangle
+    if(col > row) std::swap(row,col);
+    ints_3c_decompressed.elem(row,col) = ints_3c_compressed.elem(id_compressed,P);
+#else
+    //fill upper and lower triangle
+    ints_3c_decompressed.elem(row,col) = ints_3c_compressed.elem(id_compressed,P);
+    ints_3c_decompressed.elem(col,row) = ints_3c_compressed.elem(id_compressed,P);
+#endif
   }
 }
 
