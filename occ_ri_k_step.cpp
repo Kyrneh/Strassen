@@ -10,7 +10,6 @@ template<typename T>
 void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys);
 
 
-#if 1
 int main(int argc, char** argv){
   if(argc < 10){
     puts("Usage: <program> <N_bf> <N_aux> <N_occ> <N_vec2> <3c filename> <MO filename> <v2m_key_filename> <blocksize> <threshold>");
@@ -144,5 +143,4 @@ void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const
     decompressed_ptr[v2m_keys.elem(id_compressed,0)] = compressed_ptr[id_compressed];
   }
 }
-#endif
 

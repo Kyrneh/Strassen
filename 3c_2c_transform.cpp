@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cstdio>
 
-#if 0
 int main(int argc, char** argv){
   if(argc < 8){
     puts("Usage: <program> <N_bf> <N_aux> <N_vec2> <3c filename> <2c filename> <blocksize> <threshold>");
@@ -62,5 +61,4 @@ int main(int argc, char** argv){
 
   return 0;
 }
-#endif
 
