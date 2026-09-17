@@ -56,5 +56,9 @@ template<typename Num>
 using BlockSparseMatrixView      = BlockSparseMatrixView_basic<BlockSparseMatrix<Num>>;
 template<typename Num>
 using ConstBlockSparseMatrixView = BlockSparseMatrixView_basic<const BlockSparseMatrix<Num>>;
+template<typename T1, typename T2>
+typename T1::value_type dot(const BlockSparseMatrixView_basic<T1>& lhs,
+                             const BlockSparseMatrixView_basic<T2>& rhs, typename T1::value_type thresh = typename T1::value_type(0));
+
 
 #endif

@@ -2,6 +2,8 @@
 #include "matrix.hpp"
 #include "blocksparsematrix.h"
 #include "blocksparsematrix.hpp"
+#include "blocksparsematrixview.h"
+#include "blocksparsematrixview.hpp"
 #include "strassen.hpp"
 #include <chrono>
 #include <cstdio>

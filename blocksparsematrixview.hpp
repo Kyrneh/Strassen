@@ -45,4 +45,35 @@ size_t BlockSparseMatrixView_basic<T>::max_blocksize_row() const {return _matrix
 template<typename T>
 size_t BlockSparseMatrixView_basic<T>::max_blocksize_col() const {return _matrix->max_blocksize_col();}
 
+template<typename T1, typename T2>
+typename T1::value_type dot(const BlockSparseMatrixView_basic<T1>& lhs,
+                             const BlockSparseMatrixView_basic<T2>& rhs, const typename T1::value_type thresh){
+  using Num = typename T1::value_type;//check that we cannot do float-double dots
+  static_assert(std::is_same_v<Num,typename T2::value_type>,"dot: lhs and rhs must have the same Num type");
+  //check that dimensions match
+  assert(lhs.nblocks()    == rhs.nblocks());
+  assert(lhs.nrowblocks() == rhs.nrowblocks());
+  assert(lhs.ncolblocks() == rhs.ncolblocks());
+  const size_t nijb = lhs.nblocks();
+  const size_t njb  = lhs.ncolblocks();
+  //adjust threshold to be per block instead of per element
+  const Num thresh_per_block = thresh*static_cast<Num>(lhs.max_blocksize_row()*lhs.max_blocksize_col());
+
+  Num retval = Num(0);
+  //parallel loop over blocks
+  #pragma omp parallel for schedule(dynamic) reduction(+: retval)
+  for(size_t ijb=0;ijb<nijb;++ijb){
+    const size_t ib = ijb/njb;
+    const size_t jb = ijb%njb;
+    const auto& lhs_block = lhs.block(ib,jb);
+    const auto& rhs_block = rhs.block(ib,jb);
+    if(lhs_block.size() != 0 && rhs_block.size() != 0){
+      if(lhs_block.frobenius_norm()*rhs_block.frobenius_norm() >= thresh_per_block){
+        retval += dot(lhs_block,rhs_block);
+      }
+    }
+  }
+  return retval;
+}
+
 #endif
