@@ -19,6 +19,7 @@ template<typename Num>
 class BlockSparseMatrix final{
   using Mat = Matrix<Num,BlockAllocator<Num>>;
   public:
+    using value_type = Num;//used by BlockSparseMatrixView_basic to recover Num from T
     explicit BlockSparseMatrix() = default;//plain matrix
     //empty Matrix (but parameters set)
     explicit BlockSparseMatrix(size_t nr, size_t nc, size_t target_blocksize_row, size_t target_blocksize_col, Num thresh_in, std::shared_ptr<BlockMemoryPool<Num>> mem_pool_ptr_in = nullptr);
