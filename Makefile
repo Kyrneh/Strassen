@@ -62,7 +62,7 @@ MAIN_OBJS   := $(MAIN_SRCS:.cpp=.o)
 BINS        := $(MAIN_SRCS:.cpp=)
 HEADERS     := $(wildcard *.h) $(wildcard *.hpp)
 
-.PHONY: all clean ctags test check
+.PHONY: all clean test check
 
 all: $(BINS)
 
