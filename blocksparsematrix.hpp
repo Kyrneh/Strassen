@@ -1,6 +1,7 @@
 #ifndef BLOCKSPARSEMATRIX_HPP
 #define BLOCKSPARSEMATRIX_HPP
 #include "blocksparsematrix.h"
+#include "blocksparsematrixview.hpp"
 
 template<typename Num>
 BlockSparseMatrix<Num>::BlockSparseMatrix(
@@ -261,33 +262,12 @@ Num BlockSparseMatrix<Num>::frobenius_norm() const {
 }
 
 template<typename Num>
-Num dot(const BlockSparseMatrix<Num>& lhs, const BlockSparseMatrix<Num>& rhs, Num thresh){
-  assert(lhs.nblocks()    == rhs.nblocks());
-  assert(lhs.nrowblocks() == rhs.nrowblocks());
-  assert(lhs.ncolblocks() == rhs.ncolblocks());
+Num dot(const BlockSparseMatrix<Num>& lhs, const BlockSparseMatrix<Num>& rhs, const Num thresh){
   assert(lhs.nrow() == rhs.nrow());
   assert(lhs.ncol() == rhs.ncol());
-  const size_t nijb = lhs.nblocks();
-  const size_t njb = lhs.ncolblocks();
-  //adjust threshold to be per block instead of per element
-  const Num thresh_per_block = thresh*static_cast<Num>(lhs.max_blocksize_row()*lhs.max_blocksize_col());
-
-  Num retval = Num(0);
-  //parallel loop over blocks
-  #pragma omp parallel for schedule(dynamic) reduction(+: retval)
-  for(size_t ijb=0;ijb<nijb;++ijb){
-    const size_t ib = ijb/njb;
-    const size_t jb = ijb%njb;
-    const auto& lhs_block = lhs.block(ib,jb);
-    const auto& rhs_block = rhs.block(ib,jb);
-    if(lhs_block.size() != 0 && rhs_block.size() != 0){
-      if(lhs_block.frobenius_norm()*rhs_block.frobenius_norm() >= thresh_per_block){
-        retval += dot(lhs_block,rhs_block);
-      }
-    }
-  }
-  return retval;
+  return dot(ConstBlockSparseMatrixView<Num>(lhs),ConstBlockSparseMatrixView<Num>(rhs),thresh);
 }
+
 template<typename Num>
 size_t matmult(BlockSparseMatrix<Num>& C, 
              const BlockSparseMatrix<Num>& A, const bool transA,
