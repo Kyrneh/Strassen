@@ -288,9 +288,8 @@ Num dot(const BlockSparseMatrix<Num>& lhs, const BlockSparseMatrix<Num>& rhs, Nu
   }
   return retval;
 }
-extern size_t total_flops;
 template<typename Num>
-void matmult(BlockSparseMatrix<Num>& C, 
+size_t matmult(BlockSparseMatrix<Num>& C, 
              const BlockSparseMatrix<Num>& A, const bool transA,
              const BlockSparseMatrix<Num>& B, const bool transB,
              const Num thresh, const Num& alpha, const Num& beta)
@@ -411,9 +410,8 @@ void matmult(BlockSparseMatrix<Num>& C,
       }
     }
   }
-  #pragma omp atomic
-    total_flops += nflops;
   //printf("  %lu/%lu (%2.2f %%)\n",nsig,nib*njb*nkb,1.e2*(double)nsig/((double)(nib*njb*nkb)));
+  return nflops;
 }
 
 template<typename Num>

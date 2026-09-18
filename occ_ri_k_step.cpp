@@ -9,7 +9,6 @@
 template<typename T>
 void decompress_integrals(Matrix<T>& ints_3c_decompressed, const size_t P, const Matrix<T>& ints_3c_compressed, const Matrix<size_t>& v2m_keys, const size_t N_bf);
 
-size_t total_flops;
 int main(int argc, char** argv){
   if(argc < 10){
     puts("Usage: <program> <N_bf> <N_aux> <N_occ> <N_vec2> <3c filename> <MO filename> <v2m_key_filename> <blocksize> <threshold>");
@@ -82,7 +81,7 @@ int main(int argc, char** argv){
   for(int i=0;i<3;++i)
   {
     K_mu_i_bsm.fill_with_values(0.e0);
-    total_flops = 0lu;
+    size_t total_flops = 0lu;
     const auto start=std::chrono::steady_clock::now();
     #pragma omp parallel
     {
@@ -92,7 +91,7 @@ int main(int argc, char** argv){
       BlockSparseMatrix<double> ij_P_bsm(N_occ,N_occ,bs,bs,alloc_thresh);
       BlockSparseMatrix<double> K_mu_i_sub_bsm(N_bf,N_occ,bs,bs,alloc_thresh);
       K_mu_i_sub_bsm.fill_with_values(0.e0);
-      #pragma omp for schedule(guided)
+      #pragma omp for schedule(guided) reduction(+:total_flops)
       for(size_t P=0; P<N_aux;++P){
         //decompress from sig-shellpair storage to Nbf^2 matrix storage (only upper triange)
         decompress_integrals(ints_3c_decompressed,P,ints_3c_compressed,v2m_keys,N_bf);
@@ -100,12 +99,12 @@ int main(int argc, char** argv){
         ints_3c_decompressed_bsm.copy_from_input_matrix(ints_3c_decompressed);
 
         //(mu i|P) = \sum_nu (mu nu|P) C_{nu i}
-        matmult(mui_P_bsm,ints_3c_decompressed_bsm,false,occ_MOs_bsm,false,thresh_mult,1.0,0.0);
+        total_flops += matmult(mui_P_bsm,ints_3c_decompressed_bsm,false,occ_MOs_bsm,false,thresh_mult,1.0,0.0);
         mui_P_bsm.calc_frobenius_norms();
         //(ij|P) = \sum_mu  C_{mu i} (mu j|P)
-        matmult(ij_P_bsm,occ_MOs_bsm,true,mui_P_bsm,false,thresh_mult,1.0,0.0);
+        total_flops += matmult(ij_P_bsm,occ_MOs_bsm,true,mui_P_bsm,false,thresh_mult,1.0,0.0);
         ij_P_bsm.calc_frobenius_norms();
-        matmult(K_mu_i_sub_bsm,mui_P_bsm,false,ij_P_bsm,false,thresh_mult,1.0,1.0);
+        total_flops += matmult(K_mu_i_sub_bsm,mui_P_bsm,false,ij_P_bsm,false,thresh_mult,1.0,1.0);
       }
       //collect output of all threads
       #pragma omp critical

@@ -8,17 +8,14 @@
 #include <chrono>
 #include <cstdio>
 
-size_t min_size_for_strassen;
-size_t total_flops;
 int main(int argc, char** argv){
   if(argc < 5){
-    puts("Usage: <program> <blocksize> <strassen_min> <thresh> <n_runs>");
+    puts("Usage: <program> <blocksize> <thresh> <n_runs>");
     return 1;
   }
   const size_t bs     = (size_t)std::stoi(argv[1]);
-  min_size_for_strassen = (size_t)std::stoi(argv[2]);
-  const double thresh = std::stod(argv[3]);
-  const int    n_runs = std::stoi(argv[4]);
+  const double thresh = std::stod(argv[2]);
+  const int    n_runs = std::stoi(argv[3]);
 
   constexpr size_t N_file = 11230;
   constexpr size_t N = N_file;

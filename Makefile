@@ -62,7 +62,7 @@ MAIN_OBJS   := $(MAIN_SRCS:.cpp=.o)
 BINS        := $(MAIN_SRCS:.cpp=)
 HEADERS     := $(wildcard *.h) $(wildcard *.hpp)
 
-.PHONY: all clean ctags
+.PHONY: all clean ctags test check
 
 all: $(BINS)
 
@@ -75,6 +75,22 @@ $(BINS): %: %.o $(COMMON_OBJS)
 clean:
 	rm -f $(MAIN_OBJS) $(COMMON_OBJS) $(BINS)
 	rm -f *.a *.so
+	rm -f tests/*.o tests/run_tests
 
-ctags:
-	ctags -R --c++-kinds=+p --fields=+iaS --extra=+q
+# ---- test suite ---------------------------------------------------------
+# All tests/*.cpp are compiled into a single run_tests binary and linked
+# against the library's own COMMON_OBJS, so tests exercise the exact same
+# compiled code as the real binaries (not a reimplementation). doctest.h is
+# only included by tests/*.cpp, so it never touches the main build above.
+TEST_SRCS    := $(wildcard tests/*.cpp)
+TEST_OBJS    := $(TEST_SRCS:.cpp=.o)
+TEST_HEADERS := $(wildcard tests/*.hpp) tests/thirdparty/doctest.h
+
+tests/%.o: tests/%.cpp $(HEADERS) $(TEST_HEADERS)
+	$(CXX) $(CPPFLAGS) -Itests/thirdparty -c $< -o $@
+
+tests/run_tests: $(TEST_OBJS) $(COMMON_OBJS)
+	$(LD) -o $@ $^ $(LDLIBS) $(LDFLAGS)
+
+test check: tests/run_tests
+	./tests/run_tests

@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cstdio>
 
-size_t total_flops;
 int main(int argc, char** argv){
   if(argc != 8){
     puts("Usage: <program> <N_aux> <N_vec2> <3c filename> <2c filename> <blocksize> <threshold> <chunk_size>");

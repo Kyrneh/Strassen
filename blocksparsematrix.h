@@ -94,7 +94,7 @@ class BlockSparseMatrix final{
 };
 
 template<typename Num>
-void matmult(BlockSparseMatrix<Num>& C, 
+size_t matmult(BlockSparseMatrix<Num>& C, 
              const BlockSparseMatrix<Num>& A, const bool transa,
              const BlockSparseMatrix<Num>& B, const bool transb,
              const Num thresh, const Num& alpha = Num(1), const Num& beta = Num(0));

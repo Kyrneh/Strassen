@@ -292,7 +292,6 @@ void strassen_recurse(OwnedBlockGrid<Num>& C00, OwnedBlockGrid<Num>& C01,
 // Leaf: 1x1x1 -> single dgemm. Otherwise split 2-way per axis if possible
 // and Winograd-recurse, else fall back to dense 8-product over kb (no sparse
 // skip on this path -- operands may be sums whose norm cache is stale).
-extern size_t min_size_for_strassen;
 template<typename Num, typename GridA, typename GridB>
 void strassen_matmult_acc(OwnedBlockGrid<Num>& C, const GridA& A, const GridB& B,
                           size_t block_nr, size_t block_nc,
@@ -308,6 +307,7 @@ void strassen_matmult_acc(OwnedBlockGrid<Num>& C, const GridA& A, const GridB& B
         gemm_block(cv, av, bv, Num(1), Num(1));
         return;
     }
+    constexpr size_t min_size_for_strassen = 384lu;
     const bool too_small_for_strassen = nrb*block_nr <= min_size_for_strassen;
     if(nrb%2!=0 || nkb%2!=0 || ncb%2!=0 || too_small_for_strassen){
         for(size_t cb=0;cb<ncb;++cb)
