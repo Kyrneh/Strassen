@@ -9,7 +9,7 @@
 #include <cstdio>
 
 int main(int argc, char** argv){
-  if(argc < 5){
+  if(argc < 4){
     puts("Usage: <program> <blocksize> <thresh> <n_runs>");
     return 1;
   }
